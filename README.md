@@ -12,7 +12,7 @@ This document explains the **correct production method** for assigning a **publi
 
 The approach assumes:
 
-* A block of public IPs (e.g. `41.67.144.81–41.67.144.86`)
+* A block of public IPs (e.g. `102.x.x.x`)
 * The VM must be directly reachable from the internet
 * No NAT or port‑forwarding
 
@@ -27,360 +27,363 @@ The approach assumes:
 ```
 Internet
    │
-   Public IP Range
-      │
-      Windows Server (Hyper‑V Host)
-         │  External vSwitch (Bridged)
-            │
-            Ubuntu Server VM (Public IP Assigned)
-            ```
-
-            ### Unsupported Model (Do NOT use)
-
-            * NAT switch
-            * Default switch
-            * Internal switch
-
-            These models prevent direct public IP assignment.
-
-            ---
-
-            ## 3. Hyper‑V Configuration (Host Side)
-
-            ### Network Architecture (ASCII Diagram)
-
-            ```
-                                 Internet
-                                                          │
-                                                                           ┌───────┴────────┐
-                                                                                            │   ISP Router    │
-                                                                                                             │  (Public /29)   │
-                                                                                                                              └───────┬────────┘
-                                                                                                                                                       │
-                                                                                                                                                                     Public IP Range (x.x.x.x)
-                                                                                                                                                                                              │
-                                                                                                                                                                                                      ┌────────────────┴────────────────┐
-                                                                                                                                                                                                              │   Windows Server (Hyper‑V Host)  │
-                                                                                                                                                                                                                      │                                  │
-                                                                                                                                                                                                                              │  External Virtual Switch (L2)    │
-                                                                                                                                                                                                                                      │  Bound to Physical NIC            │
-                                                                                                                                                                                                                                              └───────────────┬─────────────────┘
-                                                                                                                                                                                                                                                                      │
-                                                                                                                                                                                                                                                                              ┌───────────────┴─────────────────┐
-                                                                                                                                                                                                                                                                                      │        Ubuntu Server VM          │
-                                                                                                                                                                                                                                                                                              │   Static Public IP Assigned      │
-                                                                                                                                                                                                                                                                                                      │     x.x.x.x/29              │
-                                                                                                                                                                                                                                                                                                              │                                  │
-                                                                                                                                                                                                                                                                                                                      │  Web Server (Nginx/Apache)       │
-                                                                                                                                                                                                                                                                                                                              └─────────────────────────────────┘
-                                                                                                                                                                                                                                                                                                                              ```
+Public IP Range
+   │
+Windows Server (Hyper‑V Host)
+   │  External vSwitch (Bridged)
+   │
+Ubuntu Server VM (Public IP Assigned)
+```
+
+### Unsupported Model (Do NOT use)
+
+* NAT switch
+* Default switch
+* Internal switch
+
+These models prevent direct public IP assignment.
+
+---
+
+## 3. Hyper‑V Configuration (Host Side)
+
+### Network Architecture (ASCII Diagram)
+
+```
+                     Internet
+                         │
+                 ┌───────┴────────┐
+                 │   ISP Router    │
+                 │  (Public /29)   │
+                 └───────┬────────┘
+                         │
+              Public IP Range (102.x.x.x)
+                         │
+        ┌────────────────┴────────────────┐
+        │   Windows Server (Hyper‑V Host)  │
+        │                                  │
+        │  External Virtual Switch (L2)    │
+        │  Bound to Physical NIC           │
+        └───────────────┬─────────────────┘
+                        │
+        ┌───────────────┴─────────────────┐
+        │        Ubuntu Server VM          │
+        │   Static Public IP Assigned      │
+        │     102.x.x.x/29                 │
+        │                                  │
+        │  Web Server (Nginx/Apache)       │
+        └─────────────────────────────────┘
+```
 
-                                                                                                                                                                                                                                                                                                                              This model ensures:
+This model ensures:
 
-                                                                                                                                                                                                                                                                                                                              * No NAT
-                                                                                                                                                                                                                                                                                                                              * End‑to‑end routing
-                                                                                                                                                                                                                                                                                                                              * Clean DNS → IP → VM mapping
+* No NAT
+* End‑to‑end routing
+* Clean DNS → IP → VM mapping
 
-                                                                                                                                                                                                                                                                                                                              ---
+---
 
-                                                                                                                                                                                                                                                                                                                              ### Step 1: Create an External Virtual Switch
+### Step 1: Create an External Virtual Switch
 
-                                                                                                                                                                                                                                                                                                                              1. Open **Hyper‑V Manager**
-                                                                                                                                                                                                                                                                                                                              2. Click **Virtual Switch Manager**
-                                                                                                                                                                                                                                                                                                                              3. Select **External** → Create
-                                                                                                                                                                                                                                                                                                                              4. Bind it to the physical NIC connected to the ISP
-                                                                                                                                                                                                                                                                                                                              5. Enable:
+1. Open **Hyper‑V Manager**
+2. Click **Virtual Switch Manager**
+3. Select **External** → Create
+4. Bind it to the physical NIC connected to the ISP
+5. Enable:
 
-                                                                                                                                                                                                                                                                                                                                 * "Allow management OS to share this network adapter" - “This option is enabled to allow the Hyper-V host (management OS) to retain network connectivity on the same physical NIC while the External Virtual Switch bridges traffic to guest virtual machines. Disable only when a separate dedicated management NIC is available.”
-                                                                                                                                                                                                                                                                                                                                 6. Apply and save and save
+   * "Allow management OS to share this network adapter" “This option is enabled to allow the Hyper-V host (management OS) to retain network connectivity on the same physical NIC while the External Virtual Switch bridges traffic to guest virtual machines. Disable only when a separate dedicated management NIC is available.”
+6. Apply and save and save
 
-                                                                                                                                                                                                                                                                                                                                 ### Step 2: Attach VM to External Switch
+### Step 2: Attach VM to External Switch
 
-                                                                                                                                                                                                                                                                                                                                 1. VM → **Settings**
-                                                                                                                                                                                                                                                                                                                                 2. Network Adapter → Select **External Switch**
-                                                                                                                                                                                                                                                                                                                                 3. Apply
+1. VM → **Settings**
+2. Network Adapter → Select **External Switch**
+3. Apply
 
-                                                                                                                                                                                                                                                                                                                                 ---
+---
 
-                                                                                                                                                                                                                                                                                                                                 ## 4. Ubuntu Server Configuration
+## 4. Ubuntu Server Configuration
 
-                                                                                                                                                                                                                                                                                                                                 ### Step 1: Identify Network Interface
+### Step 1: Identify Network Interface
 
-                                                                                                                                                                                                                                                                                                                                 ```bash
-                                                                                                                                                                                                                                                                                                                                 ip a
-                                                                                                                                                                                                                                                                                                                                 ```
+```bash
+ip a
+```
 
-                                                                                                                                                                                                                                                                                                                                 Common interface names:
+Common interface names:
 
-                                                                                                                                                                                                                                                                                                                                 * `eth0`
-                                                                                                                                                                                                                                                                                                                                 * `ens160`
-                                                                                                                                                                                                                                                                                                                                 * `ens33`
+* `eth0`
+* `ens160`
+* `ens33`
 
-                                                                                                                                                                                                                                                                                                                                 ---
+---
 
-                                                                                                                                                                                                                                                                                                                                 ### Step 2: Edit Netplan Configuration
+### Step 2: Edit Netplan Configuration
 
-                                                                                                                                                                                                                                                                                                                                 ```bash
-                                                                                                                                                                                                                                                                                                                                 sudo nano /etc/netplan/01-netcfg.yaml
-                                                                                                                                                                                                                                                                                                                                 ```
+```bash
+sudo nano /etc/netplan/01-netcfg.yaml
+```
 
-                                                                                                                                                                                                                                                                                                                                 ### Sample Static Public IP Configuration
+### Sample Static Public IP Configuration
 
-                                                                                                                                                                                                                                                                                                                                 ```yaml
-                                                                                                                                                                                                                                                                                                                                 network:
-                                                                                                                                                                                                                                                                                                                                   version: 2
-                                                                                                                                                                                                                                                                                                                                     renderer: networkd
-                                                                                                                                                                                                                                                                                                                                       ethernets:
-                                                                                                                                                                                                                                                                                                                                           ens160:
-                                                                                                                                                                                                                                                                                                                                                 dhcp4: no
-                                                                                                                                                                                                                                                                                                                                                       addresses:
-                                                                                                                                                                                                                                                                                                                                                               - x.x.x.x/29
-                                                                                                                                                                                                                                                                                                                                                                     gateway4: x.x.x.1
-                                                                                                                                                                                                                                                                                                                                                                           nameservers:
-                                                                                                                                                                                                                                                                                                                                                                                   addresses:
-                                                                                                                                                                                                                                                                                                                                                                                             - 1.1.1.1
-                                                                                                                                                                                                                                                                                                                                                                                                       - 8.8.8.8
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+```yaml
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    ens160:
+      dhcp4: no
+      addresses:
+        - 102.x.x.x/29
+      gateway4: 102.x.x.1
+      nameservers:
+        addresses:
+          - 1.1.1.1
+          - 8.8.8.8
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       > Replace:
+> Replace:
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * `ens160` → your interface name
-                                                                                                                                                                                                                                                                                                                                                                                                       * `x.x.x.x` → chosen public IP
-                                                                                                                                                                                                                                                                                                                                                                                                       * `/29` → subnet provided by ISP
-                                                                                                                                                                                                                                                                                                                                                                                                       * `x.x.x.1` → ISP gateway
+* `ens160` → your interface name
+* `102.x.x.x` → chosen public IP
+* `/29` → subnet provided by ISP
+* `102.x.x.x` → ISP gateway
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ### Step 3: Apply Configuration
+### Step 3: Apply Configuration
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```bash
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo netplan apply
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+```bash
+sudo netplan apply
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ## 5. Validation & Testing
+## 5. Validation & Testing
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ### Local Verification
+### Local Verification
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```bash
-                                                                                                                                                                                                                                                                                                                                                                                                       ip a
-                                                                                                                                                                                                                                                                                                                                                                                                       ip route
-                                                                                                                                                                                                                                                                                                                                                                                                       ping 8.8.8.8
-                                                                                                                                                                                                                                                                                                                                                                                                       ping google.com
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+```bash
+ip a
+ip route
+ping 8.8.8.8
+ping google.com
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ### External Verification (From Another Network)
+### External Verification (From Another Network)
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```bash
-                                                                                                                                                                                                                                                                                                                                                                                                       ping 41.67.144.82
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+```bash
+ping 102.x.x.x
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       If unreachable:
+If unreachable:
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * Check subnet mask
-                                                                                                                                                                                                                                                                                                                                                                                                       * Confirm external switch
-                                                                                                                                                                                                                                                                                                                                                                                                       * Verify gateway
+* Check subnet mask
+* Confirm external switch
+* Verify gateway
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ## 6. Firewall Configuration (UFW)
+## 6. Firewall Configuration (UFW)
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```bash
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo ufw allow 22
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo ufw allow 80
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo ufw allow 443
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo ufw enable
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo ufw status
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+```bash
+sudo ufw allow 22
+sudo ufw allow 80
+sudo ufw allow 443
+sudo ufw enable
+sudo ufw status
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ## 7. Web Server Setup
+## 7. Web Server Setup
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ### Apache
+### Apache
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```bash
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo apt update
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo apt install apache2 -y
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+```bash
+sudo apt update
+sudo apt install apache2 -y
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ### OR Nginx
+### OR Nginx
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```bash
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo apt install nginx -y
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+```bash
+sudo apt install nginx -y
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       Test:
+Test:
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
-                                                                                                                                                                                                                                                                                                                                                                                                       http://x.x.x.x
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+```
+http://102.x.x.x
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ## 8. Domain Name Configuration (DNS)
+## 8. Domain Name Configuration (DNS)
 
-                                                                                                                                                                                                                                                                                                                                                                                                       At your DNS provider, create:
+At your DNS provider, create:
 
-                                                                                                                                                                                                                                                                                                                                                                                                       | Type | Host | Value        |
-                                                                                                                                                                                                                                                                                                                                                                                                       | ---- | ---- | ------------ |
-                                                                                                                                                                                                                                                                                                                                                                                                       | A    | @    | x.x.x.x      |
-                                                                                                                                                                                                                                                                                                                                                                                                       | A    | www  | x.x.x.x      |
+| Type | Host | Value        |
+| ---- | ---- | ------------ |
+| A    | @    | 102.x.x.x    |
+| A    | www  | 102.x.x.x    |
 
-                                                                                                                                                                                                                                                                                                                                                                                                       TTL: 300 or Auto
+TTL: 300 or Auto
 
-                                                                                                                                                                                                                                                                                                                                                                                                       Propagation: 5 minutes – 24 hours
+Propagation: 5 minutes – 24 hours
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ## 9. SSL (Recommended)
+## 9. SSL (Recommended)
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```bash
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo apt install certbot python3-certbot-nginx -y
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo certbot --nginx
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+```bash
+sudo apt install certbot python3-certbot-nginx -y
+sudo certbot --nginx
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       (Use `--apache` if applicable)
+(Use `--apache` if applicable)
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ## 10. Common Issues & Fixes
+## 10. Common Issues & Fixes
 
-                                                                                                                                                                                                                                                                                                                                                                                                       | Issue                   | Cause           | Fix                    |
-                                                                                                                                                                                                                                                                                                                                                                                                       | ----------------------- | --------------- | ---------------------- |
-                                                                                                                                                                                                                                                                                                                                                                                                       | SSH disconnects         | Wrong gateway   | Verify ISP gateway     |
-                                                                                                                                                                                                                                                                                                                                                                                                       | No internet             | NAT switch      | Use External vSwitch   |
-                                                                                                                                                                                                                                                                                                                                                                                                       | Domain not resolving    | DNS propagation | Wait / verify A record |
-                                                                                                                                                                                                                                                                                                                                                                                                       | Site loads locally only | Firewall        | Open ports 80/443      |
+| Issue                   | Cause           | Fix                    |
+| ----------------------- | --------------- | ---------------------- |
+| SSH disconnects         | Wrong gateway   | Verify ISP gateway     |
+| No internet             | NAT switch      | Use External vSwitch   |
+| Domain not resolving    | DNS propagation | Wait / verify A record |
+| Site loads locally only | Firewall        | Open ports 80/443      |
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ## 11. Security Hardening Checklist (CIS / ISO 27001 Aligned)
+## 11. Security Hardening Checklist (CIS / ISO 27001 Aligned)
 
-                                                                                                                                                                                                                                                                                                                                                                                                       This checklist aligns with:
+This checklist aligns with:
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * **CIS Ubuntu Linux Benchmark**
-                                                                                                                                                                                                                                                                                                                                                                                                       * **ISO/IEC 27001 Annex A**
+* **CIS Ubuntu Linux Benchmark**
+* **ISO/IEC 27001 Annex A**
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ### A. Access Control (ISO 27001 A.5 / CIS Section 5)
+### A. Access Control (ISO 27001 A.5 / CIS Section 5)
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Disable root SSH login
+* [ ] Disable root SSH login
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```bash
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo nano /etc/ssh/sshd_config
-                                                                                                                                                                                                                                                                                                                                                                                                       PermitRootLogin no
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+```bash
+sudo nano /etc/ssh/sshd_config
+PermitRootLogin no
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Enforce SSH key authentication
+* [ ] Enforce SSH key authentication
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```bash
-                                                                                                                                                                                                                                                                                                                                                                                                       PasswordAuthentication no
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+```bash
+PasswordAuthentication no
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Limit SSH access by user/group
+* [ ] Limit SSH access by user/group
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```bash
-                                                                                                                                                                                                                                                                                                                                                                                                       AllowUsers adminuser
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+```bash
+AllowUsers adminuser
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ### B. Authentication & Privilege Management (ISO 27001 A.6)
+### B. Authentication & Privilege Management (ISO 27001 A.6)
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Use sudo for privilege escalation "not compulsory but recommended"
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Remove unused user accounts
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Enforce strong password policy
+* [ ] Use sudo for privilege escalation
+* [ ] Remove unused user accounts
+* [ ] Enforce strong password policy
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+```bash
+sudo apt install libpam-pwquality
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ### C. Network Security (ISO 27001 A.8 / CIS Section 3)
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Enable UFW with least‑privilege rules
+### C. Network Security (ISO 27001 A.8 / CIS Section 3)
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```bash
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo ufw default deny incoming
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo ufw default allow outgoing
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+* [ ] Enable UFW with least‑privilege rules
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Allow only required ports (22, 80, 443)
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Disable unused services
+```bash
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```bash
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo systemctl disable service_name
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+* [ ] Allow only required ports (22, 80, 443)
+* [ ] Disable unused services
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+```bash
+sudo systemctl disable service_name
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ### E. Patch & Vulnerability Management (ISO 27001 A.8.8)
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Enable unattended security updates
+### D. Patch & Vulnerability Management (ISO 27001 A.8.8)
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```bash
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo apt install unattended-upgrades
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+* [ ] Enable unattended security updates
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Regularly apply OS updates
+```bash
+sudo apt install unattended-upgrades
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```bash
-                                                                                                                                                                                                                                                                                                                                                                                                       sudo apt update && sudo apt upgrade
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
+* [ ] Regularly apply OS updates
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+```bash
+sudo apt update && sudo apt upgrade
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ### F. Web Server Hardening (ISO 27001 A.8.20)
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Disable directory listing
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Remove default web pages
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Enforce HTTPS (TLS 1.2+)
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Use strong SSL ciphers
+### E. Web Server Hardening (ISO 27001 A.8.20)
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+* [ ] Disable directory listing
+* [ ] Remove default web pages
+* [ ] Enforce HTTPS (TLS 1.2+)
+* [ ] Use strong SSL ciphers
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ### G. Backup & Recovery (ISO 27001 A.8.13)
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Schedule automated backups
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Store backups off‑server
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Test restoration procedures quarterly
+### F. Backup & Recovery (ISO 27001 A.8.13)
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+* [ ] Schedule automated backups
+* [ ] Store backups off‑server
+* [ ] Test restoration procedures quarterly
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ### H. Host & Hyper‑V Security (ISO 27001 A.8.1)
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Keep Windows Server host fully patched
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Restrict Hyper‑V Manager access
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Enable Windows Defender / EDR
-                                                                                                                                                                                                                                                                                                                                                                                                       * [ ] Disable unused Hyper‑V virtual switches
+### G. Host & Hyper‑V Security (ISO 27001 A.8.1)
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+* [ ] Keep Windows Server host fully patched
+* [ ] Restrict Hyper‑V Manager access
+* [ ] Enable Windows Defender / EDR
+* [ ] Disable unused Hyper‑V virtual switches
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ### Compliance Note
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       This hardening baseline supports:
+### Compliance Note
 
-                                                                                                                                                                                                                                                                                                                                                                                                       * ISO 27001 audits
-                                                                                                                                                                                                                                                                                                                                                                                                       * MSP operational standards
-                                                                                                                                                                                                                                                                                                                                                                                                       * Enterprise hosting environments
+This hardening baseline supports:
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+* ISO 27001 audits
+* MSP operational standards
+* Enterprise hosting environments
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ---
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ## 12. Repository Usage (GitHub)
+---
 
-                                                                                                                                                                                                                                                                                                                                                                                                       Recommended structure:
+## 12. Repository Usage (GitHub)
 
-                                                                                                                                                                                                                                                                                                                                                                                                       ```
-                                                                                                                                                                                                                                                                                                                                                                                                       linux-server-guides/
-                                                                                                                                                                                                                                                                                                                                                                                                        └── hyperv/
-                                                                                                                                                                                                                                                                                                                                                                                                             └── ubuntu-public-ip-setup.md
-                                                                                                                                                                                                                                                                                                                                                                                                             ```
+Recommended structure:
 
-                                                                                                                                                                                                                                                                                                                                                                                                             This document is safe for reuse by:
+```
+linux-server-guides/
+ └── hyperv/
+     └── ubuntu-public-ip-setup.md
+```
 
-                                                                                                                                                                                                                                                                                                                                                                                                             * Junior system administrators
-                                                                                                                                                                                                                                                                                                                                                                                                             * Infrastructure teams
-                                                                                                                                                                                                                                                                                                                                                                                                             * MSP onboarding
+This document is safe for reuse by:
 
-                                                                                                                                                                                                                                                                                                                                                                                                             ---
-                                                                                                                                                                                                                                                                                                                                                                                                             
+* Junior system administrators
+* Infrastructure teams
+* MSP onboarding
+
+---
